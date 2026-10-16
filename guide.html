@@ -1,0 +1,34 @@
+<!DOCTYPE html><html lang="zh-CN"><head><meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'none'; style-src 'self'; img-src 'self'; connect-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="apple-mobile-web-app-capable" content="yes">
+<link rel="stylesheet" href="style.css"><title>快捷指令教程</title></head><body>
+<header><h1>iOS 快捷指令记账教程</h1><a href="index.html" class="filebtn">返回</a></header><main>
+<div class="card"><h3>原理</h3><p>快捷指令弹窗让你输入金额/备注，然后用 Safari 打开本应用的网址（带参数），应用自动记一笔。整个过程不经过任何服务器：参数只在你手机上的浏览器里处理。</p>
+<p>下文中 <b>你的网址</b> 指你部署本应用的地址，例如 <code>https://xxx.github.io/jizhang/index.html</code>。</p></div>
+<div class="card"><h3>支持的网址参数</h3><ul>
+<li><code>?add=1&amp;amount=35&amp;note=午饭&amp;cat=餐饮</code> 直接记一笔（cat 可省略，按备注自动分类）</li>
+<li><code>&amp;type=income</code> 记为收入；<code>&amp;date=2026-10-14</code> 指定日期</li>
+<li><code>?add=1&amp;note=xxx</code>（不带金额）打开填写表单</li>
+<li><code>?quick=1</code> 打开并聚焦快速输入框；<code>?quick=1&amp;text=午饭 35</code> 预填</li></ul></div>
+<div class="card"><h3>第一步：创建快捷指令「记一笔」</h3><ol>
+<li>打开「快捷指令」App → 右上角 <b>＋</b> → 命名为「记一笔」。</li>
+<li>添加操作 <b>「要求输入」</b>：类型选「数字」，提示「金额」。</li>
+<li>添加操作 <b>「要求输入」</b>：类型「文本」，提示「备注（可空）」。</li>
+<li>添加操作 <b>「URL」</b>，内容填：<br><code>你的网址?add=1&amp;amount=</code>[插入变量：提供的输入(金额)]<code>&amp;note=</code>[插入变量：提供的输入(备注)]</li>
+<li>（可选）若备注可能含 &amp; # 等符号，在第3步后加「URL 编码」操作对备注编码，再把编码结果插入 URL。</li>
+<li>添加操作 <b>「打开 URL」</b>。</li>
+<li>点「完成」。可在详情里「添加到主屏幕」或绑定「轻点背面」（设置→辅助功能→触控→轻点背面）。</li></ol>
+<p class="muted">更简单的版本：只放一个「URL」= <code>你的网址?quick=1</code> + 「打开 URL」，打开后直接输入「午饭 35」。</p></div>
+<div class="card"><h3>第二步：个人自动化（付款后提醒记账）</h3><ol>
+<li>快捷指令 → 底部「自动化」→ <b>＋</b>（新建个人自动化）。</li>
+<li>选择 <b>「App」</b> → 选择 <b>支付宝</b> 和 <b>微信</b> → 勾选 <b>「已关闭」</b>（离开支付App时触发）。</li>
+<li>选择 <b>「立即运行」</b>（iOS 17+；旧版本关闭「运行前询问」），关闭「运行时通知」可选。</li>
+<li>操作：选择「运行快捷指令」→「记一笔」。</li></ol>
+<p>替代触发器：<b>「电子钱包」/「交易」</b>自动化（iOS 17+）仅对 Apple Pay 卡片交易生效，可把金额、商户作为变量直接传入 URL，无需手动输入——但微信/支付宝付款不会触发它。</p></div>
+<div class="card"><h3>局限（请知悉）</h3><ul>
+<li>iOS 不允许读取微信/支付宝的付款金额，所以只能「半自动」：每次仍需手动输入金额。每次关闭微信也会触发（包括只是聊天），可在弹窗时取消。</li>
+<li>「打开 URL」会在 <b>Safari</b> 中打开，而不是主屏幕 App。iOS 中 Safari 与主屏 App 的存储是<b>相互隔离</b>的：通过快捷指令记录的数据存在 Safari 里，主屏 App 里看不到。建议：<b>统一使用 Safari 打开本应用</b>（可把网址加入书签/个人收藏），或者定期用「设置→备份」在两边之间导出/导入 JSON（导入会自动合并去重）。</li>
+<li>Safari 可能在长时间（约 7 天）未访问某网站后清除其本地数据；添加到主屏幕的 App 一般不受此限制。请定期导出备份。</li>
+<li>开启密码锁后，快捷指令打开应用需先解锁才会记录。</li>
+<li>账单导入是最可靠的「自动」方式：每月从微信/支付宝导出账单导入，重复记录会自动去重（手动记的与账单里的条目时间不同，可能无法识别为重复，导入预览中可自行判断）。</li></ul></div>
+</main></body></html>

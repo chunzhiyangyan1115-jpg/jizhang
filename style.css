@@ -1,0 +1,19 @@
+*{box-sizing:border-box}body{margin:0;font-family:-apple-system,"PingFang SC",sans-serif;background:#f2f3f5;color:#222;padding-bottom:calc(64px + env(safe-area-inset-bottom))}
+header{background:#1f8a5b;color:#fff;padding:calc(10px + env(safe-area-inset-top)) 16px 10px;display:flex;justify-content:space-between;align-items:center;position:sticky;top:0;z-index:5}
+h1{font-size:20px;margin:0}.month button{background:none;border:0;color:#fff;font-size:22px;padding:0 10px}
+main{padding:10px}.card{background:#fff;border-radius:12px;padding:12px;margin-bottom:10px}h3{margin:0 0 8px;font-size:16px}
+input,select,textarea{font-size:16px;padding:10px;border:1px solid #ddd;border-radius:8px;width:100%;margin:4px 0 10px;background:#fff}
+button,.filebtn{font-size:15px;padding:10px 14px;border:0;border-radius:8px;background:#1f8a5b;color:#fff;display:inline-block}
+.ghost{background:#e6e8eb;color:#333}.danger{background:#d9453b}.filebtn input{display:none}
+#quickForm{display:flex;gap:8px}#quickForm input{margin:0}.muted{color:#888;font-size:13px}
+.summary{display:flex;justify-content:space-around;text-align:center;font-size:13px;color:#666}.summary b{display:block;font-size:18px;color:#222}
+.list{list-style:none;margin:0;padding:0}.list li{display:flex;justify-content:space-between;padding:10px 2px;border-bottom:1px solid #f0f0f0}
+.list .n{font-size:12px;color:#999}.inc{color:#1f8a5b}.exp{color:#d9453b}.hidden{display:none!important}
+nav{position:fixed;bottom:0;left:0;right:0;display:flex;background:#fff;border-top:1px solid #ddd;padding-bottom:env(safe-area-inset-bottom)}
+nav button{flex:1;background:none;color:#666;border-radius:0;padding:14px 0}nav button.on{color:#1f8a5b;font-weight:600}
+.seg{display:flex;gap:16px;margin-bottom:8px}.seg input{width:auto}.row{display:flex;gap:8px}
+canvas{width:100%;height:auto}.bar{height:8px;background:#eee;border-radius:4px;overflow:hidden}.bar i{display:block;height:100%;background:#1f8a5b}.bar i.over{background:#d9453b}
+.lock{position:fixed;inset:0;background:#f2f3f5;z-index:20;padding:30vh 30px;text-align:center}
+.toast{position:fixed;left:50%;bottom:90px;transform:translateX(-50%);background:#333;color:#fff;padding:8px 16px;border-radius:16px;z-index:30}
+table{width:100%;border-collapse:collapse;font-size:12px}td{padding:4px 2px;border-bottom:1px solid #eee}tr.dup{opacity:.4}
+.ct{display:flex;justify-content:space-between;font-size:14px;padding:3px 0}.dot{display:inline-block;width:10px;height:10px;border-radius:5px;margin-right:6px}
