@@ -3,7 +3,6 @@
 <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data: blob:; connect-src 'none'; font-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'; frame-src 'none'; worker-src 'self'; manifest-src 'self'">
 <meta name="referrer" content="no-referrer">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<meta name="apple-mobile-web-app-capable" content="yes"><meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="记账"><meta name="theme-color" content="#1f8a5b">
 <link rel="apple-touch-icon" href="icons/apple-touch-icon.png"><link rel="icon" href="icons/icon-192.png">
@@ -37,7 +36,7 @@
  <div class="card"><h3>分类关键词</h3><p class="muted">每行：分类: 关键词1,关键词2</p><textarea id="kwText" rows="10"></textarea><button id="saveKw">保存关键词</button> <button id="resetKw" class="ghost">恢复默认</button></div>
  <div class="card"><h3>备份</h3><button id="exportBtn">导出 JSON 备份</button> <label class="filebtn">导入备份<input type="file" id="importJson" accept=".json,application/json"></label><p id="bakMsg" class="muted"></p></div>
  <div class="card"><h3>密码锁</h3><p id="pinState" class="muted"></p><input id="pinNew" type="password" inputmode="numeric" placeholder="新密码（4位以上）"><button id="pinSet">设置/修改</button> <button id="pinOff" class="ghost">关闭密码</button></div>
- <div class="card"><a href="guide.html">📱 iOS 快捷指令自动记账教程</a><p class="muted">所有数据仅存于本机浏览器（IndexedDB），无任何网络请求。删除主屏App或清除Safari数据会丢失记录，请定期备份。</p></div>
+ <div class="card"><a href="guide.html">📱 iOS 快捷指令自动记账教程</a><p class="muted">所有数据仅存于本机浏览器（IndexedDB），无任何网络请求。清除Safari网站数据会丢失记录，请定期备份。</p></div>
 </section>
 </main>
 <nav><button data-tab="home" class="on">首页</button><button data-tab="add">记一笔</button><button data-tab="import">导入</button><button data-tab="set">设置</button></nav>

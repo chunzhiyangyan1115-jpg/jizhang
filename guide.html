@@ -1,6 +1,6 @@
 <!DOCTYPE html><html lang="zh-CN"><head><meta charset="utf-8">
 <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'none'; style-src 'self'; img-src 'self'; connect-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'">
-<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <link rel="stylesheet" href="style.css"><title>快捷指令教程</title></head><body>
 <header><h1>iOS 快捷指令记账教程</h1><a href="index.html" class="filebtn">返回</a></header><main>
 <div class="card"><h3>原理</h3><p>快捷指令弹窗让你输入金额/备注，然后用 Safari 打开本应用的网址（带参数），应用自动记一笔。整个过程不经过任何服务器：参数只在你手机上的浏览器里处理。</p>
@@ -28,8 +28,8 @@
 <p>替代触发器：<b>「电子钱包」/「交易」</b>自动化（iOS 17+）仅对 Apple Pay 卡片交易生效，可把金额、商户作为变量直接传入 URL，无需手动输入——但微信/支付宝付款不会触发它。</p></div>
 <div class="card"><h3>局限（请知悉）</h3><ul>
 <li>iOS 不允许读取微信/支付宝的付款金额，所以只能「半自动」：每次仍需手动输入金额。每次关闭微信也会触发（包括只是聊天），可在弹窗时取消。</li>
-<li>「打开 URL」会在 <b>Safari</b> 中打开，而不是主屏幕 App。iOS 中 Safari 与主屏 App 的存储是<b>相互隔离</b>的：通过快捷指令记录的数据存在 Safari 里，主屏 App 里看不到。建议：<b>统一使用 Safari 打开本应用</b>（可把网址加入书签/个人收藏），或者定期用「设置→备份」在两边之间导出/导入 JSON（导入会自动合并去重）。</li>
-<li>Safari 可能在长时间（约 7 天）未访问某网站后清除其本地数据；添加到主屏幕的 App 一般不受此限制。请定期导出备份。</li>
+<li><b>主屏幕图标现在会在 Safari 中打开本应用</b>，与快捷指令「打开 URL」共用同一份 Safari 存储，所以快捷指令记录的账目会直接出现在这里。<br>如果你之前已添加过主屏图标（旧版以独立 Web App 方式打开，数据与 Safari 隔离）：请先在旧图标里「设置→备份」导出 JSON，然后<b>删除旧的主屏图标</b>，再用 Safari 打开本网址，点「分享」→「添加到主屏幕」重新添加；若 iOS 26 显示「作为 Web App 打开」开关，请将其<b>关闭</b>。最后在 Safari 中导入备份（自动合并去重）。</li>
+<li>Safari 可能在长时间（约 7 天）未访问某网站后清除其本地数据（主屏图标同样走 Safari 存储）。请定期导出备份。</li>
 <li>开启密码锁后，快捷指令打开应用需先解锁才会记录。</li>
 <li>账单导入是最可靠的「自动」方式：每月从微信/支付宝导出账单导入，重复记录会自动去重（手动记的与账单里的条目时间不同，可能无法识别为重复，导入预览中可自行判断）。</li></ul></div>
 </main></body></html>
