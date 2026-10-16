@@ -32,7 +32,7 @@ function render(){var k=ym();$('mLabel').textContent=cur.getFullYear()+'年'+(cu
  var bb=$('budgetBox');if(settings.budget>0){var p=Math.min(100,exp/settings.budget*100);bb.classList.remove('hidden');
   bb.innerHTML='<div class="ct"><span>预算 '+money(settings.budget)+'</span><span>剩余 '+money(settings.budget-exp)+'</span></div><div class="bar"><i class="'+(exp>settings.budget?'over':'')+'" data-w="'+p+'"></i></div>';}else bb.classList.add('hidden');
  drawChart(cats,exp);
- fixStyles();$('list').innerHTML=m.length?m.map(function(e){return '<li data-id="'+esc(e.id)+'"'+(e.id===lastAdded?' class="new"':'')+'>'+(e.photo?'<img class="th" alt="" data-p="'+esc(e.id)+'">':'')+'<div class="grow"><div>'+esc(e.category)+' '+esc(e.note)+'</div><div class="n">'+esc(e.time||e.date)+(e.source?' · '+(e.source==='wechat'?'微信':'支付宝'):'')+'</div></div><b class="'+(e.type==='income'?'inc':'exp')+'">'+(e.type==='income'?'+':'-')+money(e.amount)+'</b></li>';}).join(''):'<li class="muted">本月暂无记录</li>';thumbs();}
+ fixStyles();$('list').innerHTML=m.length?m.map(function(e){return '<li data-id="'+esc(e.id)+'"'+(e.id===lastAdded?' class="new"':'')+'>'+(e.photo?'<img class="th" alt="" data-p="'+esc(e.id)+'">':'')+'<div class="grow"><div>'+esc(e.category)+' '+esc(e.note)+'</div><div class="n">'+esc(e.time||e.date)+(e.source?' · '+({wechat:'微信',alipay:'支付宝',ocr:'截图'}[e.source]||''):'')+'</div></div><b class="'+(e.type==='income'?'inc':'exp')+'">'+(e.type==='income'?'+':'-')+money(e.amount)+'</b></li>';}).join(''):'<li class="muted">本月暂无记录</li>';thumbs();}
 function drawChart(cats,total){var c=$('chart'),x=c.getContext('2d'),dpr=window.devicePixelRatio||1,W=c.clientWidth||300,H=Math.round(W/2);
  c.width=W*dpr;c.height=H*dpr;x.scale(dpr,dpr);x.clearRect(0,0,W,H);
  var keys=JZ.CATS.filter(function(k){return cats[k]>0;}).sort(function(a,b){return cats[b]-cats[a];});
@@ -49,6 +49,26 @@ function openForm(e){showTab('add');e=e||{};$('fId').value=e.id||'';$('fAmount')
  $('fCat').value=e.category||'餐饮';document.querySelector('input[name=fType][value='+(e.type==='income'?'income':'expense')+']').checked=true;
  $('formTitle').textContent=e.id?'编辑':'记一笔';formPhoto=undefined;$('fPhoto').value='';showPhoto(null);if(e.id&&e.photo)getPhoto(e.id).then(showPhoto);$('fDel').classList.toggle('hidden',!e.id);}
 var prevURL=null;function showPhoto(b){if(prevURL){URL.revokeObjectURL(prevURL);prevURL=null;}var i=$('fPhotoPrev');if(b){prevURL=URL.createObjectURL(b);i.src=prevURL;i.classList.remove('hidden');$('fPhotoDel').classList.remove('hidden');}else{i.removeAttribute('src');i.classList.add('hidden');$('fPhotoDel').classList.add('hidden');}}
+
+// ---- on-device OCR (tesseract.js, all assets same-origin under ocr/) ----
+var ocrP=null,ocrTimer=null;
+function loadScript(src){return new Promise(function(res,rej){var s=document.createElement('script');s.src=src;s.onload=res;s.onerror=function(){rej(new Error('识别引擎加载失败（首次使用需联网下载到本机）'));};document.head.appendChild(s);});}
+function ocrWorker(logger){clearTimeout(ocrTimer);ocrWorker.log=logger;
+ if(!ocrP)ocrP=(window.Tesseract?Promise.resolve():loadScript('ocr/tesseract.min.js')).then(function(){var base=new URL('ocr/',location.href).href;
+  var cw=Tesseract.createWorker(['chi_sim','eng'],1,{workerPath:base+'worker.min.js',corePath:base+'tesseract-core-'+(simd()?'simd-':'')+'lstm.js',langPath:base+'lang',gzip:false,workerBlobURL:false,cacheMethod:'none',logger:function(m){if(ocrWorker.log)ocrWorker.log(m);},errorHandler:function(e){console.warn('ocr',e);}});
+  return Promise.race([cw,new Promise(function(_,rej){setTimeout(function(){rej(new Error('识别引擎加载超时，请检查网络后重试'));},120000);})]);
+ }).then(function(w){return w.setParameters({preserve_interword_spaces:'1',tessedit_pageseg_mode:'3'}).then(function(){return w;});}).catch(function(e){ocrP=null;throw e;});
+ return ocrP;}
+function simd(){try{return WebAssembly.validate(new Uint8Array([0,97,115,109,1,0,0,0,1,5,1,96,0,1,123,3,2,1,0,10,10,1,8,0,65,0,253,15,253,98,11]));}catch(e){return false;}}
+// free the ~100MB wasm heap a while after use
+function releaseOcr(){clearTimeout(ocrTimer);ocrTimer=setTimeout(function(){if(ocrP){var p=ocrP;ocrP=null;p.then(function(w){w.terminate();}).catch(function(){});}},60000);}
+// downscale (<=1080px wide) + grayscale + binarize (grey secondary text -> black; colored icons/backgrounds -> white/black blobs)
+function prepImage(file){return new Promise(function(res,rej){var u=URL.createObjectURL(file),im=new Image();im.onload=function(){URL.revokeObjectURL(u);
+  var w=im.naturalWidth,h=im.naturalHeight,k=Math.min(1,1080/w,4000/h);var c=document.createElement('canvas');c.width=Math.round(w*k);c.height=Math.round(h*k);var x=c.getContext('2d');x.drawImage(im,0,0,c.width,c.height);
+  var d=x.getImageData(0,0,c.width,c.height),a=d.data,dark=0;for(var i=0;i<a.length;i+=4){var g=0.299*a[i]+0.587*a[i+1]+0.114*a[i+2];a[i]=g;dark+=g<128?1:0;}
+  var inv=dark>a.length/8; // dark mode screenshot -> invert
+  for(var j=0;j<a.length;j+=4){var v=a[j];if(inv)v=255-v;v=v<200?0:255;a[j]=a[j+1]=a[j+2]=v;}x.putImageData(d,0,0);res(c);};
+ im.onerror=function(){URL.revokeObjectURL(u);rej(new Error('无法读取该图片（HEIC 请改用截图或设置相机格式为「兼容性最佳」）'));};im.src=u;});}
 function bind(){
  $('fPhoto').onchange=function(){var f=this.files[0];if(!f)return;shrink(f).then(function(b){formPhoto=b;showPhoto(b);}).catch(function(e){toast(e.message);});};
  $('fPhotoDel').onclick=function(){formPhoto=null;$('fPhoto').value='';showPhoto(null);};
@@ -69,14 +89,26 @@ document.querySelectorAll('input[name=fType]').forEach(function(r){r.onchange=fu
  $('list').onclick=function(ev){var li=ev.target.closest('li[data-id]');if(li)openForm(entries.find(function(e){return e.id===li.dataset.id;}));};
  // import
  var pending=[];
+ function showPreview(items,msg,resetInput){pending=JZ.dedupe(items,entries);var nd=pending.filter(function(p){return !p.dup;}).length;
+  $('impMsg').textContent=msg.replace('{n}',pending.length).replace('{new}',nd).replace('{dup}',pending.length-nd);
+  if(!pending.length){$('impPreview').innerHTML='';return;}
+  $('impPreview').innerHTML='<button id="doImport">导入所选</button> <span class="muted">可修改金额/日期/备注/分类，取消勾选不导入</span><table>'+pending.map(function(p,i){return '<tr class="'+(p.dup?'dup':'')+'"><td><input type="checkbox" data-i="'+i+'" data-f="on"'+(p.dup?'':' checked')+'></td><td><input type="date" data-i="'+i+'" data-f="date" value="'+esc(p.date)+'">'+(p.dateGuessed?'<br><small class="muted">未识别日期</small>':'')+'</td><td><input data-i="'+i+'" data-f="note" value="'+esc(p.note)+'"></td><td><select data-i="'+i+'" data-f="category">'+JZ.CATS.map(function(c){return '<option'+(c===p.category?' selected':'')+'>'+c+'</option>';}).join('')+'</select></td><td class="'+(p.type==='income'?'inc':'exp')+'">'+(p.type==='income'?'+':'-')+'<input class="amt" type="number" step="0.01" min="0" inputmode="decimal" data-i="'+i+'" data-f="amount" value="'+money(p.amount)+'">'+(p.dup?' 重复':'')+'</td></tr>';}).join('')+'</table>';
+  $('impPreview').onchange=function(ev){var el=ev.target,i=el.dataset.i,f=el.dataset.f;if(i==null||!f)return;var p=pending[i];
+   if(f==='on')p.skip=!el.checked;else if(f==='amount')p.amount=Math.abs(JZ.parseAmount(el.value));else if(f==='date'){if(p.time)p.time=el.value+p.time.slice(10);p.date=el.value;}else p[f]=el.value;};
+  pending.forEach(function(p){p.skip=!!p.dup;});
+  $('doImport').onclick=function(){var list=pending.filter(function(p){return !p.skip&&p.amount>0&&p.date;}).map(function(p){var e=Object.assign({},p);delete e.dup;delete e.skip;delete e.dateGuessed;e.id=uid();e.created=Date.now();return e;});
+   if(!list.length){toast('未选择任何记录');return;}
+   putEntries(list).then(loadAll).then(function(){render();$('impPreview').innerHTML='';$('impMsg').textContent='已导入 '+list.length+' 条';resetInput();});};}
  $('billFile').onchange=function(){var f=this.files[0];if(!f)return;$('impMsg').textContent='解析中…';
-  f.arrayBuffer().then(function(b){return JZ.parseBillFile(f.name,b,kw());}).then(function(r){pending=JZ.dedupe(r.items,entries);var nd=pending.filter(function(p){return !p.dup;}).length;
-   $('impMsg').textContent=(r.source==='wechat'?'微信':'支付宝')+'账单：共'+r.items.length+'条，新'+nd+'条，重复'+(r.items.length-nd)+'条，跳过(中性/退款/关闭)'+r.skipped+'条';
-   $('impPreview').innerHTML=(nd?'<button id="doImport">导入 '+nd+' 条新记录</button> ':'')+'<table>'+pending.map(function(p,i){return '<tr class="'+(p.dup?'dup':'')+'"><td>'+esc(p.time)+'</td><td>'+esc(p.note)+'</td><td><select data-i="'+i+'">'+JZ.CATS.map(function(c){return '<option'+(c===p.category?' selected':'')+'>'+c+'</option>';}).join('')+'</select></td><td class="'+(p.type==='income'?'inc':'exp')+'">'+(p.type==='income'?'+':'-')+money(p.amount)+(p.dup?' 重复':'')+'</td></tr>';}).join('')+'</table>';
-   $('impPreview').onchange=function(ev){var i=ev.target.dataset.i;if(i!=null)pending[i].category=ev.target.value;};
-   var d=$('doImport');if(d)d.onclick=function(){var list=pending.filter(function(p){return !p.dup;}).map(function(p){var e=Object.assign({},p);delete e.dup;e.id=uid();e.created=Date.now();return e;});
-    putEntries(list).then(loadAll).then(function(){render();$('impPreview').innerHTML='';$('impMsg').textContent='已导入 '+list.length+' 条';$('billFile').value='';});};
+  f.arrayBuffer().then(function(b){return JZ.parseBillFile(f.name,b,kw());}).then(function(r){
+   showPreview(r.items,(r.source==='wechat'?'微信':'支付宝')+'账单：共{n}条，新{new}条，重复{dup}条，跳过(中性/退款/关闭)'+r.skipped+'条',function(){$('billFile').value='';});
   }).catch(function(err){$('impMsg').textContent='解析失败：'+err.message;});};
+ $('billImg').onchange=function(){var fs=[].slice.call(this.files);if(!fs.length)return;var inp=this,all=[],i=0;inp.disabled=true;$('impPreview').innerHTML='';
+  function prog(p){$('impMsg').textContent='正在识别'+(fs.length>1?'（'+(i+1)+'/'+fs.length+'）':'')+'… '+Math.round(p*100)+'%';}
+  prog(0);ocrWorker(function(m){if(m.status==='recognizing text')prog(m.progress);else if(i===0&&/load|initiali/.test(m.status||''))$('impMsg').textContent='正在加载识别引擎（首次约12MB，之后离线可用）…';}).then(function(w){
+   return fs.reduce(function(pr,f,k){return pr.then(function(){i=k;prog(0);return prepImage(f);}).then(function(c){return w.recognize(c,{},{blocks:true,text:true});}).then(function(r){var rt=JZ.ocrRowsText(JZ.ocrWordsFromData(r.data));var got=JZ.parseOcrText(rt||r.data.text,kw());if(!got.length&&rt)got=JZ.parseOcrText(r.data.text,kw());all=all.concat(got);});},Promise.resolve());
+  }).then(function(){inp.disabled=false;showPreview(all,'截图识别：共{n}条，新{new}条，重复{dup}条。识别可能有误，请核对后导入。'+(all.length?'':'未识别到金额，请换一张更清晰的截图或手动记账。'),function(){inp.value='';});
+  }).catch(function(err){inp.disabled=false;inp.value='';$('impMsg').textContent='识别失败：'+(err&&err.message||err);}).then(releaseOcr);};
  // settings
  $('budget').value=settings.budget||'';$('saveBudget').onclick=function(){settings.budget=parseFloat($('budget').value)||0;setKV('budget',settings.budget).then(function(){render();toast('已保存');});};
  function kwToText(k){return JZ.CATS.filter(function(c){return k[c];}).map(function(c){return c+': '+k[c].join(',');}).join('\n');}

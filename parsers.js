@@ -101,6 +101,52 @@ async function parseXlsx(buf){var f=await unzip(buf),td=new TextDecoder();var ss
    var ci=row.length;if(ref){ci=0;for(var q=0;q<ref.length;q++)ci=ci*26+ref.charCodeAt(q)-64;ci--;}while(row.length<ci)row.push('');row[ci]=String(val).trim();}
   rows.push(row);}return rows;}
 async function parseBillFile(name,buf,kw){var rows;if(/\.xlsx$/i.test(name))rows=await parseXlsx(buf);else rows=parseCSV(decodeBytes(buf));return parseBillRows(rows,kw);}
-var api={parseAmount:parseAmount,CATS:CATS,DEFAULT_KW:DEFAULT_KW,categorize:categorize,parseQuick:parseQuick,parseCSV:parseCSV,parseBillRows:parseBillRows,dedupe:dedupe,decodeBytes:decodeBytes,parseXlsx:parseXlsx,parseBillFile:parseBillFile,fmtDate:fmtDate,normTime:normTime};
+
+// rebuild visual rows from OCR word boxes (multi-column screenshots: amount at right edge, merchant at left)
+function ocrRowsText(words){var ws=(words||[]).filter(function(w){return w&&w.text&&w.text.trim()&&w.bbox;}).map(function(w){var b=w.bbox;return {t:w.text.trim(),x0:b.x0,x1:b.x1,cy:(b.y0+b.y1)/2,h:Math.max(1,b.y1-b.y0)};}).sort(function(a,b){return a.cy-b.cy;});
+ var rows=[];ws.forEach(function(w){var r=rows[rows.length-1];if(r&&Math.abs(w.cy-r.cy)<Math.max(r.h,w.h)*0.55){r.ws.push(w);r.cy=(r.cy*(r.ws.length-1)+w.cy)/r.ws.length;r.h=Math.max(r.h,w.h);}else rows.push({cy:w.cy,h:w.h,ws:[w]});});
+ return rows.map(function(r){r.ws.sort(function(a,b){return a.x0-b.x0;});var s='',prev=null;r.ws.forEach(function(w){if(prev){var gap=w.x0-prev.x1;s+=gap>r.h*2?'   ':gap>r.h*0.25?' ':'';}s+=w.t;prev=w;});return s;}).join('\n');}
+function ocrWordsFromData(d){var out=[];(d&&d.blocks||[]).forEach(function(b){(b.paragraphs||[]).forEach(function(p){(p.lines||[]).forEach(function(l){(l.words||[]).forEach(function(w){out.push({text:w.text,bbox:w.bbox});});});});});if(!out.length&&d&&d.words)out=d.words;return out;}
+// ---- OCR text (WeChat/Alipay screenshots) -> transactions ----
+function ocrClean(t){return String(t||'').replace(/\r/g,'').replace(/[０-９]/g,function(c){return String.fromCharCode(c.charCodeAt(0)-0xFEE0);})
+ .replace(/([\u3400-\u9fff\uff00-\uffef])[ \t]+(?=[\u3400-\u9fff\uff00-\uffef])/g,'$1').replace(/([\u3400-\u9fff])[ \t]+(?=[\u3400-\u9fff])/g,'$1')
+ .replace(/([-+一]\s?\d+) (\d{2})(?=\s*$|\s{2})/gm,'$1.$2').replace(/[：]/g,':').replace(/[，]/g,',').replace(/[．。]/g,'.').replace(/[−–—]/g,'-');}
+var RE_SIGNED=/(^|[^\d.:\/-])([-+一])\s?(\d{1,3}(?:,\d{3})*(?:\.\d{1,2})|\d+\.\d{2})(?!\d)/;
+function ocrDate(s,today){today=today||new Date();var m,y,mo,d,hh='',mi='';var tm=s.match(/(\d{1,2})\s?:\s?(\d{2})/);if(tm&&+tm[1]<24){hh=tm[1];mi=tm[2];}
+ if((m=s.match(/(20\d{2})\s?[年\-\/.]\s?(\d{1,2})\s?[月\-\/.]\s?(\d{1,2})/))){y=+m[1];mo=+m[2];d=+m[3];}
+ else if((m=s.match(/(\d{1,2})\s?月\s?(\d{1,2})\s?日/))||(m=s.match(/(?:^|[^\d.])(\d{1,2})-(\d{1,2})(?=\s|$|\d{1,2}:\d{2})/))){mo=+m[1];d=+m[2];y=today.getFullYear();if(mo>today.getMonth()+1)y--;}
+ else if(/今天/.test(s)){y=today.getFullYear();mo=today.getMonth()+1;d=today.getDate();}
+ else if(/昨天/.test(s)){var t=new Date(today);t.setDate(t.getDate()-1);y=t.getFullYear();mo=t.getMonth()+1;d=t.getDate();}
+ else if(/前天/.test(s)){var t2=new Date(today);t2.setDate(t2.getDate()-2);y=t2.getFullYear();mo=t2.getMonth()+1;d=t2.getDate();}
+ else return null;
+ if(!(mo>=1&&mo<=12&&d>=1&&d<=31))return null;var date=y+'-'+pad(mo)+'-'+pad(d);return {date:date,time:hh?date+' '+pad(+hh)+':'+mi+':00':''};}
+var NOISE=/^(全部账单|账单|筛选|统计|搜索|收支统计|支出|收入|本月|查看|账单详情|当前状态|支付成功|付款成功|交易成功|完成|返回|更多|服务|账单分类|对此订单有疑问|申请电子回单|发起群收款)$/;
+function cleanMerchant(s){return String(s||'').replace(/^(?:[A-Za-z0-9©®@()（）\[\]{}<>|]{1,3}\s+)+(?=[\u3400-\u9fff])/,'').replace(RE_SIGNED,'').replace(/[¥￥]?\s?\d+[.,]\d{2}/g,'').replace(/(20\d{2}[年\-\/.])?\d{1,2}[月\-\/.]\d{1,2}日?/g,'').replace(/(今天|昨天|前天)/g,'').replace(/\d{1,2}:\d{2}(:\d{2})?/g,'')
+ .replace(/^[\s|>›<·•:,.\-_=~'"`]+|[\s|>›<·•:,.\-_=~'"`]+$/g,'').replace(/\s{2,}/g,' ').trim();}
+function isMerch(s){return /[\u3400-\u9fffA-Za-z]{2,}/.test(s)&&!NOISE.test(s)&&!/^\d+$/.test(s);}
+function parseOcrText(text,kw,today){today=today||new Date();var t=ocrClean(text);var lines=t.split('\n').map(function(l){return l.trim();}).filter(Boolean);var def=fmtDate(today);var out=[];
+ var signed=lines.map(function(l){var m=l.match(RE_SIGNED);return m?{sign:m[2]==='+'?1:-1,amt:parseFloat(m[3].replace(/,/g,'')),idx:m.index+m[1].length}:null;});
+ var nSigned=signed.filter(Boolean).length;var single=/支付成功|付款成功|交易成功|收款成功|已收款|已支付|账单详情|当前状态|商户全称|收款方/.test(t)&&nSigned<=1;
+ if(single){var amt=NaN,sign=-1,m;
+  for(var i=0;i<lines.length;i++){if((m=lines[i].match(/[¥￥]\s?(\d+(?:,\d{3})*(?:\.\d{1,2})?)/))&&!/优惠|立减|红包|手续费|原价/.test(lines[i])){amt=parseFloat(m[1].replace(/,/g,''));break;}
+   if(signed[i]){amt=signed[i].amt;sign=signed[i].sign;break;}}
+  if(isNaN(amt)){for(var j=0;j<lines.length;j++){if((m=lines[j].match(/^\s*(\d+\.\d{2})\s*$/))){amt=parseFloat(m[1]);break;}}}
+  if(!(amt>0))return [];
+  if(/收款成功|已收款|收入|转入/.test(t)&&!/支付成功|付款成功/.test(t))sign=1;
+  var merch='';var keys=/^(商户全称|收款方|商户名称|商家|商品说明|商品|对方账户|交易对方|收款人|付款给)\s*:?\s*(.*)$/;
+  for(var k=0;k<lines.length;k++){var mm=lines[k].match(keys);if(mm){var v=cleanMerchant(mm[2])||cleanMerchant(lines[k+1]||'');if(v){merch=v;if(/商户全称|收款方|交易对方|商户名称/.test(mm[1]))break;}}}
+  if(!merch){var after=false;for(var q2=0;q2<lines.length&&!merch;q2++){if(!after){after=/[¥￥]\s?\d|^\s*[-+]?\d+\.\d{2}\s*$/.test(lines[q2]);continue;}
+   var pr=lines[q2].split(/\s{3,}/);if(pr.length===2&&!/时间|日期|方式|单号|订单|状态|备注|优惠|说明|分类|支付奖励/.test(pr[0])){var v2=cleanMerchant(pr[1]);if(isMerch(v2)&&!/^\d/.test(v2))merch=v2;}}}
+  if(!merch){for(var q=0;q<lines.length;q++){if(/[¥￥]|\d+\.\d{2}/.test(lines[q])){for(var r=q-1;r>=0;r--){var c=cleanMerchant(lines[r]);if(isMerch(c)&&!/成功|微信支付|支付宝/.test(c)){merch=c;break;}}break;}}}
+  var dt=null;for(var z=0;z<lines.length&&!dt;z++)if(/时间|日期/.test(lines[z])||/20\d{2}/.test(lines[z]))dt=ocrDate(lines[z],today);
+  out.push(mk(amt,sign,merch,dt));return out;}
+ for(var a=0;a<lines.length;a++){var s=signed[a];if(!s||!(s.amt>0))continue;
+  var note=cleanMerchant(lines[a].slice(0,s.idx));if(!isMerch(note)){note='';for(var b=a-1;b>=0&&b>=a-2;b--){if(signed[b])break;var c2=cleanMerchant(lines[b]);if(isMerch(c2)&&!ocrDate(lines[b],today)){note=c2;break;}}}
+  var dt2=ocrDate(lines[a],today);for(var e=a+1;!dt2&&e<lines.length&&e<=a+2;e++){if(signed[e])break;dt2=ocrDate(lines[e],today);}
+  out.push(mk(s.amt,s.sign,note,dt2));}
+ return out;
+ function mk(amt,sign,note,dt){var inc=sign>0;return {amount:Math.round(amt*100)/100,type:inc?'income':'expense',category:inc?'收入':categorize(note,kw),note:note,date:dt?dt.date:def,time:dt?dt.time:'',source:'ocr',dateGuessed:!dt};}}
+
+var api={ocrRowsText:ocrRowsText,ocrWordsFromData:ocrWordsFromData,parseOcrText:parseOcrText,ocrClean:ocrClean,parseAmount:parseAmount,CATS:CATS,DEFAULT_KW:DEFAULT_KW,categorize:categorize,parseQuick:parseQuick,parseCSV:parseCSV,parseBillRows:parseBillRows,dedupe:dedupe,decodeBytes:decodeBytes,parseXlsx:parseXlsx,parseBillFile:parseBillFile,fmtDate:fmtDate,normTime:normTime};
 if(typeof module!=='undefined'&&module.exports)module.exports=api;else root.JZ=api;
 })(this);
