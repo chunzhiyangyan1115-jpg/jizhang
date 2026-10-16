@@ -1,19 +1,24 @@
 (function(){'use strict';
 var $=function(id){return document.getElementById(id);};
 var COLORS=['#e8684a','#5b8ff9','#f6bd16','#9270ca','#5d7092','#ff9d4d','#269a99','#1f8a5b','#aaaaaa'];
-var db,entries=[],settings={budget:0,kw:null,pin:null},cur=new Date();cur.setDate(1);
-function openDB(){return new Promise(function(res,rej){var r=indexedDB.open('jizhang',1);
- r.onupgradeneeded=function(){var d=r.result;d.createObjectStore('entries',{keyPath:'id'});d.createObjectStore('kv');};
+var lastAdded=null,formPhoto=undefined,db,entries=[],settings={budget:0,kw:null,pin:null},cur=new Date();cur.setDate(1);
+function openDB(){return new Promise(function(res,rej){var r=indexedDB.open('jizhang',2);
+ r.onupgradeneeded=function(){var d=r.result;if(!d.objectStoreNames.contains('entries'))d.createObjectStore('entries',{keyPath:'id'});if(!d.objectStoreNames.contains('kv'))d.createObjectStore('kv');if(!d.objectStoreNames.contains('photos'))d.createObjectStore('photos');};
  r.onsuccess=function(){res(r.result);};r.onerror=function(){rej(r.error);};});}
 function tx(store,mode,fn){return new Promise(function(res,rej){var t=db.transaction(store,mode),s=t.objectStore(store),out=fn(s);t.oncomplete=function(){res(out instanceof IDBRequest?out.result:undefined);};t.onerror=function(){rej(t.error);};});}
 function loadAll(){return tx('entries','readonly',function(s){return s.getAll();}).then(function(a){entries=a;});}
 function putEntries(list){return tx('entries','readwrite',function(s){list.forEach(function(e){s.put(e);});});}
-function delEntry(id){return tx('entries','readwrite',function(s){s.delete(id);});}
+function delEntry(id){return tx('entries','readwrite',function(s){s.delete(id);}).then(function(){return tx('photos','readwrite',function(s){s.delete(id);});});}
+function getPhoto(id){return tx('photos','readonly',function(s){return s.get(id);});}
+function setPhoto(id,blob){return tx('photos','readwrite',function(s){if(blob)s.put(blob,id);else s.delete(id);});}
+// downscale to JPEG (max 1280px) fully on-device
+function shrink(file){return new Promise(function(res,rej){var u=URL.createObjectURL(file),im=new Image();im.onload=function(){var M=1280,w=im.naturalWidth,h=im.naturalHeight,k=Math.min(1,M/Math.max(w,h));var c=document.createElement('canvas');c.width=Math.round(w*k);c.height=Math.round(h*k);c.getContext('2d').drawImage(im,0,0,c.width,c.height);URL.revokeObjectURL(u);c.toBlob(function(b){b?res(b):rej(new Error('压缩失败'));},'image/jpeg',0.8);};im.onerror=function(){URL.revokeObjectURL(u);rej(new Error('无法读取该图片（HEIC 请在设置→相机→格式选「兼容性最佳」或截图后再选）'));};im.src=u;});}
+var thumbURLs=[];function thumbs(){thumbURLs.forEach(URL.revokeObjectURL);thumbURLs=[];document.querySelectorAll('#list img[data-p]').forEach(function(img){getPhoto(img.dataset.p).then(function(b){if(b){var u=URL.createObjectURL(b);thumbURLs.push(u);img.src=u;}});});}
 function getKV(k){return tx('kv','readonly',function(s){return s.get(k);});}
 function setKV(k,v){return tx('kv','readwrite',function(s){s.put(v,k);});}
 function uid(){return Date.now().toString(36)+Math.random().toString(36).slice(2,8);}
 function kw(){return settings.kw||JZ.DEFAULT_KW;}
-function toast(m){var t=$('toast');t.textContent=m;t.classList.remove('hidden');clearTimeout(toast.t);toast.t=setTimeout(function(){t.classList.add('hidden');},1800);}
+function toast(m,big){var t=$('toast');t.textContent=m;t.classList.toggle('big',!!big);t.classList.remove('hidden');clearTimeout(toast.t);toast.t=setTimeout(function(){t.classList.add('hidden');},big?5000:1800);}
 function esc(s){return String(s==null?'':s).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];});}
 function money(n){return (Math.round(n*100)/100).toFixed(2);}
 function ym(){return cur.getFullYear()+'-'+('0'+(cur.getMonth()+1)).slice(-2);}
@@ -27,7 +32,7 @@ function render(){var k=ym();$('mLabel').textContent=cur.getFullYear()+'年'+(cu
  var bb=$('budgetBox');if(settings.budget>0){var p=Math.min(100,exp/settings.budget*100);bb.classList.remove('hidden');
   bb.innerHTML='<div class="ct"><span>预算 '+money(settings.budget)+'</span><span>剩余 '+money(settings.budget-exp)+'</span></div><div class="bar"><i class="'+(exp>settings.budget?'over':'')+'" data-w="'+p+'"></i></div>';}else bb.classList.add('hidden');
  drawChart(cats,exp);
- fixStyles();$('list').innerHTML=m.length?m.map(function(e){return '<li data-id="'+esc(e.id)+'"><div><div>'+esc(e.category)+' '+esc(e.note)+'</div><div class="n">'+esc(e.time||e.date)+(e.source?' · '+(e.source==='wechat'?'微信':'支付宝'):'')+'</div></div><b class="'+(e.type==='income'?'inc':'exp')+'">'+(e.type==='income'?'+':'-')+money(e.amount)+'</b></li>';}).join(''):'<li class="muted">本月暂无记录</li>';}
+ fixStyles();$('list').innerHTML=m.length?m.map(function(e){return '<li data-id="'+esc(e.id)+'"'+(e.id===lastAdded?' class="new"':'')+'>'+(e.photo?'<img class="th" alt="" data-p="'+esc(e.id)+'">':'')+'<div class="grow"><div>'+esc(e.category)+' '+esc(e.note)+'</div><div class="n">'+esc(e.time||e.date)+(e.source?' · '+(e.source==='wechat'?'微信':'支付宝'):'')+'</div></div><b class="'+(e.type==='income'?'inc':'exp')+'">'+(e.type==='income'?'+':'-')+money(e.amount)+'</b></li>';}).join(''):'<li class="muted">本月暂无记录</li>';thumbs();}
 function drawChart(cats,total){var c=$('chart'),x=c.getContext('2d'),dpr=window.devicePixelRatio||1,W=c.clientWidth||300,H=Math.round(W/2);
  c.width=W*dpr;c.height=H*dpr;x.scale(dpr,dpr);x.clearRect(0,0,W,H);
  var keys=JZ.CATS.filter(function(k){return cats[k]>0;}).sort(function(a,b){return cats[b]-cats[a];});
@@ -42,17 +47,21 @@ function drawChart(cats,total){var c=$('chart'),x=c.getContext('2d'),dpr=window.
 function fixStyles(){document.querySelectorAll('[data-w]').forEach(function(e){e.style.width=e.dataset.w+'%';});document.querySelectorAll('[data-c]').forEach(function(e){e.style.background=e.dataset.c;});}
 function openForm(e){showTab('add');e=e||{};$('fId').value=e.id||'';$('fAmount').value=e.amount||'';$('fNote').value=e.note||'';$('fDate').value=e.date||JZ.fmtDate(new Date());
  $('fCat').value=e.category||'餐饮';document.querySelector('input[name=fType][value='+(e.type==='income'?'income':'expense')+']').checked=true;
- $('formTitle').textContent=e.id?'编辑':'记一笔';$('fDel').classList.toggle('hidden',!e.id);}
+ $('formTitle').textContent=e.id?'编辑':'记一笔';formPhoto=undefined;$('fPhoto').value='';showPhoto(null);if(e.id&&e.photo)getPhoto(e.id).then(showPhoto);$('fDel').classList.toggle('hidden',!e.id);}
+var prevURL=null;function showPhoto(b){if(prevURL){URL.revokeObjectURL(prevURL);prevURL=null;}var i=$('fPhotoPrev');if(b){prevURL=URL.createObjectURL(b);i.src=prevURL;i.classList.remove('hidden');$('fPhotoDel').classList.remove('hidden');}else{i.removeAttribute('src');i.classList.add('hidden');$('fPhotoDel').classList.add('hidden');}}
 function bind(){
+ $('fPhoto').onchange=function(){var f=this.files[0];if(!f)return;shrink(f).then(function(b){formPhoto=b;showPhoto(b);}).catch(function(e){toast(e.message);});};
+ $('fPhotoDel').onclick=function(){formPhoto=null;$('fPhoto').value='';showPhoto(null);};
+ $('fPhotoPrev').onclick=function(){if(this.src)window.open(this.src);};
  $('fCat').innerHTML=JZ.CATS.map(function(c){return '<option>'+c+'</option>';}).join('');
  document.querySelectorAll('nav button').forEach(function(b){b.onclick=function(){if(b.dataset.tab==='add')openForm();else showTab(b.dataset.tab);};});
  $('mPrev').onclick=function(){cur.setMonth(cur.getMonth()-1);render();};$('mNext').onclick=function(){cur.setMonth(cur.getMonth()+1);render();};
  $('quick').oninput=function(){var p=JZ.parseQuick(this.value,kw());$('quickHint').textContent=p?('→ '+(p.type==='income'?'收入':'支出')+' ¥'+p.amount+' · '+p.category+' · '+(p.note||'无备注')+' · '+p.date):'';};
  $('quickForm').onsubmit=function(ev){ev.preventDefault();var p=JZ.parseQuick($('quick').value,kw());if(!p){toast('未识别到金额');return;}addEntry(p).then(function(){$('quick').value='';$('quickHint').textContent='';toast('已记录 ¥'+p.amount+' '+p.category);});};
  $('entryForm').onsubmit=function(ev){ev.preventDefault();var id=$('fId').value,old=entries.find(function(e){return e.id===id;})||{};
-  var e=Object.assign({},old,{id:id||undefined,amount:Math.abs(parseFloat($('fAmount').value)),type:document.querySelector('input[name=fType]:checked').value,category:$('fCat').value,note:$('fNote').value.trim(),date:$('fDate').value});
-  if(!(e.amount>0)){toast('金额无效');return;}if(old.time&&old.date!==e.date)e.time=e.date+old.time.slice(10);
-  addEntry(e).then(function(){toast('已保存');showTab('home');});};
+  var e=Object.assign({},old,{id:id||undefined,amount:Math.abs(JZ.parseAmount($('fAmount').value)),type:document.querySelector('input[name=fType]:checked').value,category:$('fCat').value,note:$('fNote').value.trim(),date:$('fDate').value});
+  if(!(e.amount>0)){toast('金额无效');return;}e.id=e.id||uid();if(formPhoto!==undefined)e.photo=!!formPhoto;var ph=formPhoto;if(old.time&&old.date!==e.date)e.time=e.date+old.time.slice(10);
+  (ph!==undefined?setPhoto(e.id,ph):Promise.resolve()).then(function(){return addEntry(e);}).then(function(){toast('已保存');showTab('home');});};
 document.querySelectorAll('input[name=fType]').forEach(function(r){r.onchange=function(){if(r.value==='income')$('fCat').value='收入';else if($('fCat').value==='收入')$('fCat').value=JZ.categorize($('fNote').value,kw());};});
  $('fNote').onchange=function(){if(!$('fId').value&&document.querySelector('input[name=fType]:checked').value==='expense')$('fCat').value=JZ.categorize(this.value,kw());};
  $('fDel').onclick=function(){if(confirm('确定删除这条记录？'))delEntry($('fId').value).then(loadAll).then(function(){render();showTab('home');toast('已删除');});};
@@ -97,16 +106,22 @@ var unlocked=false,afterUnlock=null;
 function unlock(){verify($('lockPin').value).then(function(ok){if(ok){unlocked=true;$('lock').classList.add('hidden');$('lockPin').value='';if(afterUnlock){afterUnlock();afterUnlock=null;}}else $('lockMsg').textContent='密码错误';});}
 function lockNow(){if(settings.pin){unlocked=false;$('lock').classList.remove('hidden');setTimeout(function(){$('lockPin').focus();},50);}}
 document.addEventListener('visibilitychange',function(){if(document.hidden&&settings.pin){lockNow();}});
-function handleURL(){var q=new URLSearchParams(location.search);if(![...q.keys()].length)return;
+function urlParams(){var q=new URLSearchParams(location.search),h=location.hash.replace(/^#\??/,'');
+ if(h&&/(^|&)(add|quick|amount)=/.test(h))new URLSearchParams(h).forEach(function(v,k){if(!q.has(k))q.set(k,v);});return q;}
+function handleURL(){var q=urlParams();if(!q.has('add')&&!q.has('quick'))return;
+ // clean URL immediately so reload / back never re-adds
+ history.replaceState(null,'',location.pathname);
+ var amt=JZ.parseAmount(q.get('amount')),note=(q.get('note')||'').trim();
  var run=function(){
-  if(q.get('add')==='1'){var amt=parseFloat(q.get('amount'));var note=(q.get('note')||'').trim();
+  if(q.get('add')==='1'){
    if(amt>0){var type=q.get('type')==='income'?'income':'expense';var cat=q.get('cat');if(JZ.CATS.indexOf(cat)<0)cat=type==='income'?'收入':JZ.categorize(note,kw());if(cat==='收入')type='income';
     var date=/^\d{4}-\d{2}-\d{2}$/.test(q.get('date')||'')?q.get('date'):JZ.fmtDate(new Date());
-    addEntry({amount:Math.round(amt*100)/100,type:type,category:cat,note:note,date:date,source:q.get('src')||undefined}).then(function(){toast('已通过快捷指令记录 ¥'+amt+' '+cat);});}
-   else{openForm({note:note,category:q.get('cat')||undefined});}}
-  else if(q.get('quick')==='1'){showTab('home');var i=$('quick');if(q.get('text')){i.value=q.get('text');i.oninput();}i.focus();}
-  history.replaceState(null,'',location.pathname);};
- if(settings.pin&&!unlocked)afterUnlock=run;else run();}
+    var e={id:uid(),amount:amt,type:type,category:cat,note:note,date:date,source:q.get('src')||undefined};lastAdded=e.id;
+    cur=new Date(date+'T00:00:00');cur.setDate(1);showTab('home');
+    addEntry(e).then(function(){toast('✅ 已记一笔 ¥'+money(amt).replace(/\.00$/,'')+' '+cat+(note?' · '+note:''),true);});}
+   else{openForm({note:note,category:q.get('cat')||undefined});if(q.get('amount'))toast('金额「'+q.get('amount')+'」无法识别，请手动填写',true);}}
+  else if(q.get('quick')==='1'){showTab('home');var i=$('quick');if(q.get('text')){i.value=q.get('text');i.oninput();}i.focus();}};
+ if(settings.pin&&!unlocked){afterUnlock=run;$('lockMsg').textContent=q.get('add')==='1'&&amt>0?'解锁后将记录 ¥'+amt:'';}else run();}
 openDB().then(function(d){db=d;return Promise.all([loadAll(),getKV('budget'),getKV('kw'),getKV('pin')]);}).then(function(r){settings.budget=r[1]||0;settings.kw=r[2]||null;settings.pin=r[3]||null;
  bind();pinState();render();if(settings.pin)lockNow();else unlocked=true;handleURL();
  if(navigator.storage&&navigator.storage.persist)navigator.storage.persist();}).catch(function(e){alert('数据库打开失败：'+e);});

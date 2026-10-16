@@ -41,6 +41,9 @@ function parseCSV(text){var rows=[],row=[],f='',q=false;
   else f+=ch;}
  if(f!==''||row.length){row.push(f);rows.push(row);}
  return rows.map(function(r){return r.map(function(c){return c.replace(/\t/g,'').trim();});});}
+function parseAmount(v){if(v==null)return NaN;var s=String(v).trim().replace(/[０-９]/g,function(c){return String.fromCharCode(c.charCodeAt(0)-0xFEE0);}).replace(/[．。]/g,'.').replace(/[，]/g,',').replace(/[¥￥\s元]|RMB|CNY/gi,'');
+ if(/^\d{1,3}(,\d{3})+(\.\d+)?$/.test(s))s=s.replace(/,/g,'');else if(/^\d+,\d{1,2}$/.test(s))s=s.replace(',','.');else if(/^\d{1,3}(\.\d{3})+,\d{1,2}$/.test(s))s=s.replace(/\./g,'').replace(',','.');
+ if(!/^\d+(\.\d+)?$/.test(s))return NaN;return Math.round(parseFloat(s)*100)/100;}
 function num(v){var n=parseFloat(String(v||'').replace(/[¥￥,\s]/g,''));return isNaN(n)?0:Math.abs(n);}
 function normTime(t){t=String(t||'').trim();
  if(/^\d+(\.\d+)?$/.test(t)){var d=new Date(Math.round((parseFloat(t)-25569)*864e5));// excel serial (UTC)
@@ -98,6 +101,6 @@ async function parseXlsx(buf){var f=await unzip(buf),td=new TextDecoder();var ss
    var ci=row.length;if(ref){ci=0;for(var q=0;q<ref.length;q++)ci=ci*26+ref.charCodeAt(q)-64;ci--;}while(row.length<ci)row.push('');row[ci]=String(val).trim();}
   rows.push(row);}return rows;}
 async function parseBillFile(name,buf,kw){var rows;if(/\.xlsx$/i.test(name))rows=await parseXlsx(buf);else rows=parseCSV(decodeBytes(buf));return parseBillRows(rows,kw);}
-var api={CATS:CATS,DEFAULT_KW:DEFAULT_KW,categorize:categorize,parseQuick:parseQuick,parseCSV:parseCSV,parseBillRows:parseBillRows,dedupe:dedupe,decodeBytes:decodeBytes,parseXlsx:parseXlsx,parseBillFile:parseBillFile,fmtDate:fmtDate,normTime:normTime};
+var api={parseAmount:parseAmount,CATS:CATS,DEFAULT_KW:DEFAULT_KW,categorize:categorize,parseQuick:parseQuick,parseCSV:parseCSV,parseBillRows:parseBillRows,dedupe:dedupe,decodeBytes:decodeBytes,parseXlsx:parseXlsx,parseBillFile:parseBillFile,fmtDate:fmtDate,normTime:normTime};
 if(typeof module!=='undefined'&&module.exports)module.exports=api;else root.JZ=api;
 })(this);

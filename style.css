@@ -17,3 +17,7 @@ canvas{width:100%;height:auto}.bar{height:8px;background:#eee;border-radius:4px;
 .toast{position:fixed;left:50%;bottom:90px;transform:translateX(-50%);background:#333;color:#fff;padding:8px 16px;border-radius:16px;z-index:30}
 table{width:100%;border-collapse:collapse;font-size:12px}td{padding:4px 2px;border-bottom:1px solid #eee}tr.dup{opacity:.4}
 .ct{display:flex;justify-content:space-between;font-size:14px;padding:3px 0}.dot{display:inline-block;width:10px;height:10px;border-radius:5px;margin-right:6px}
+
+.toast.big{bottom:auto;top:calc(70px + env(safe-area-inset-top));font-size:18px;padding:14px 22px;border-radius:12px;background:#1f8a5b;box-shadow:0 4px 16px rgba(0,0,0,.25);max-width:90vw;text-align:center}
+.list li.new{background:#e7f6ee}.list .grow{flex:1}.th{width:40px;height:40px;object-fit:cover;border-radius:6px;margin-right:8px}
+.photo img{display:block;max-width:100%;max-height:240px;border-radius:8px;margin:8px 0}
